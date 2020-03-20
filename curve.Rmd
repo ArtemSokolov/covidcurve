@@ -29,7 +29,7 @@ rawUS <- filter( rawAll, Country == "US" ) %>%
 ```{r}
 ## Compute total and new confirmed cases for each day
 computeNew <- function(X) {
-  X %>% group_by( Date ) %>% 
+  X %>% group_by( Date ) %>%
     summarize_at( "Confirmed", sum ) %>%
     arrange( Date ) %>%
     mutate( New = c(0,diff(Confirmed)) )
@@ -37,23 +37,41 @@ computeNew <- function(X) {
 
 plotBase <- function(X) {
   X1 <- X %>% rename( Total = Confirmed ) %>%
-    gather( Category, Confirmed, -Date )
+    gather( Category, Confirmed, New, Total )
   ggplot( X1, aes(x=Date, y=Confirmed) ) +
     facet_wrap(~Category, nrow=1) + theme_bw() +
     geom_bar(stat="identity")
 }
-  
-US <- computeNew(rawUS)
-Mass <- rawUS %>%
-  filter( State == "Massachusetts" | 
-            grepl(", MA", State) ) %>% 
-  computeNew()
-
-plotBase( US ) + ggtitle("US cases")
-plotBase( Mass ) + ggtitle("Massachusetts")
 ```
 
 ```{r}
 ## It appears that the most consistent tracking began around 2/27
 ## We'll use that for fitting
+## For each day, compute the number of days since start of study
+US <- computeNew(rawUS) %>% filter(Date >= lubridate::mdy("2/27/2020")) %>%
+    mutate(nDays = as.integer(Date - lubridate::mdy("2/26/2020")))
+plotBase(US) + ggtitle("US cases") +
+    scale_y_continuous( trans = 'log10' )
+```
+
+```{r}
+## Define the objective function
+flnorm <- function(x, m, s, w, b) {w * dlnorm( x+b, m, s )}
+
+fobj <- function(v)
+{
+    ypred <- flnorm( US$nDays, v[1], v[2], v[3], v[4] )
+    err <- log(ypred+1) - log(US$New+1)
+    sqrt(mean(err^2))
+}
+
+res <- optim( c(1,1,1,-5), fobj ) %>%
+    .$par %>% set_names( c("m", "s", "w","b") ) %>%
+    as.list()
+
+X <- tibble( x=1:22 ) %>%
+    mutate( y = dlnorm(x-5, 1, 2) )
+
+ggplot( X, aes(x,y) ) + geom_line()
+
 ```
