@@ -1,7 +1,7 @@
 ---
 title: "Fitting the COVID-19 curve"
 author: "Artem Sokolov"
-date: "March 17, 2020"
+date: "Last Updated: `r Sys.Date()`"
 output: html_document
 ---
 
