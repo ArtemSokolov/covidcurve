@@ -57,19 +57,30 @@ plotBase(US) + ggtitle("US cases") +
 
 ```{r}
 ## Define the objective function
-flnorm <- function(x, w, b) {w * dlnorm( x+b, 0, 1 )}
+flnorm <- function(x, m, s, w) {w * dnorm(x, m, s)}
 
 fobj <- function(v)
 {
-    ypred <- flnorm( US$nDays, v[1], v[2], v[3], v[4] )
-    err <- abs(ypred - US$New)
-    mean(err)
+    ypred <- flnorm( US$nDays, v[1], v[2], v[3] )
+    err <- (ypred - US$New)^2
+    sqrt(mean(err))
 }
 
-res <- optim( c(1,1,1,0), fobj )
+res <- optim( c(25,10,1e5), fobj )
 
-param <- as.list(res$par) %>% set_names( c("m", "s", "w","b") )
+param <- as.list(res$par) %>% set_names( c("m", "s", "w") )
 
-partial(flnorm, !!!param)(US$nDays)
+Pred <- tibble( nDays = 1:(max(US$nDays)+5),
+                New = partial(flnorm, !!!param)(nDays),
+                Date = lubridate::mdy("02/26/2020") + 
+                  lubridate::days(nDays),
+                Type = "Prediction" )
+
+X <- select( US, Date, nDays, New ) %>% mutate(Type = "US Cases") %>%
+  bind_rows(Pred)
+
+ggplot(mapping = aes(Date, New)) + theme_bw() +
+  geom_bar( data=subset(X, Type=="US Cases"), stat="identity") +
+  geom_line( data=subset(X, Type=="Prediction"), color="red", size=1.25 )
 
 ```
