@@ -60,34 +60,30 @@ k <- 5
 Pred <- tibble( nDays = 1:(nd+k),
                 New = partial(fdist, !!!param)(nDays),
                 Date = dStart + lubridate::days(nDays-1),
-                Values = "Model Fit" )
+                Values = "Gaussian Fit" )
 
 ## Combine with observed data
 P <- US %>% mutate(Values = "Observed") %>% bind_rows(Pred)
 
 ## Plot results
 etxt <- function(s, ...) {element_text( size = s, face = "bold", ... )}
-ggplot(mapping = aes(Date, New, fill=Values)) + theme_bw() +
+gg <- ggplot(mapping = aes(Date, New, fill=Values)) + theme_bw() +
   geom_bar( data=subset(P, Values=="Observed"), stat="identity" ) +
-  geom_line( data=subset(P, Values=="Model Fit"), color="tomato", size=1.25 ) +
+  geom_line( data=subset(P, Values=="Gaussian Fit"), color="tomato", size=1.25 ) +
   ylab( "New Cases in the U.S." ) +
-  scale_fill_manual( values=c("Observed"="gray", "Model Fit"="tomato") ) +
+  scale_fill_manual( values=c("Observed"="gray", "Gaussian Fit"="tomato") ) +
   scale_x_date(date_breaks="2 days", date_labels="%b %d") +
   theme( axis.text.y = etxt(12), axis.title = etxt(14),
          axis.text.x = etxt(12, angle=90, hjust=1, vjust=0.5),
-         legend.text = etxt(12), legend.title = etxt(14),
-         legend.position = "top" )
+         legend.text = etxt(12), legend.title = etxt(14) )
 
+plotly::ggplotly(gg) %>% plotly::layout(legend = list(orientation="h", y=100))
 ```
 
-Current parameters and assumptions:
+References:
 
-* Data source: [CSSE at Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data)
+* Data: [CSSE at Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data)
 
-* Source code: https://github.com/ArtemSokolov/covidcurve
+* Code: https://github.com/ArtemSokolov/covidcurve
 
-* Start date used for the model: `r dStart`
 
-* Fit distribution family: Gaussian
-
-* Optimization criterion: RMSE
