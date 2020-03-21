@@ -1,6 +1,6 @@
 ---
 title: "Fitting the COVID-19 curve"
-author: "Artem Sokolov (Last Updated: `r Sys.Date()`)"
+author: "Artem Sokolov (Updated: `r Sys.Date()`)"
 output: html_document
 ---
 
@@ -89,7 +89,8 @@ gg <-
   geom_line( data=subset(P, Values!="Observed"), size=1.25 ) +
   scale_fill_manual(values=pal) + scale_color_manual(values=pal) +
   scale_x_date(date_breaks="2 days", date_labels="%b %d") +
-  ylab( "New Cases in the U.S." ) + theme_bw() +
+  scale_y_continuous( name="New Cases in the U.S.", labels=scales::label_number_si() ) + 
+  theme_bw() +
   theme( axis.text.y = etxt(12), axis.title = etxt(14),
          axis.text.x = etxt(12, angle=90, hjust=1, vjust=0.5),
          legend.text = etxt(12), legend.title = etxt(14) )
