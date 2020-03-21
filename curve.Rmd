@@ -58,28 +58,33 @@ fitCurve <- function( .df, obs, f, v0, k=5 ) {
         RMSE = fit$value )
 }
 
+## Will be fitting New Cases column in US data
+fcurve <- partial( fitCurve, US, New )
+
 ## Define parametric distributions to fit to data
 fgauss <- function(x, p) {p[1] * dnorm(x, p[2], p[3])}
-flnorm <- function(x, m, s, w, b) {w * dlnorm(x-b, m, s)}
-
-##optim( c(5,1,1e5,0), fobj2 )
+flnorm <- function(x, p) {p[1] * dlnorm(x-p[2], p[3], p[4])}
 
 ## Define the starting parameters and fit curves
-v0 <- c(max(US$New)*2, nrow(US), nrow(US)/2)
-cgauss <- fitCurve( US, New, fgauss, v0 )
+v0g  <- c(max(US$New)*2, nrow(US), nrow(US)/2)
+v0ln <- c(1e5, 0, 5, 1)
+cgauss <- fcurve( fgauss, v0g )
+clnorm <- fcurve( flnorm, v0ln ) 
 
 ## Combine with observed data
 P <- bind_rows( mutate(US,          Values="Observed"),
-                mutate(cgauss$Pred, Values="Gaussian Fit") )
+                mutate(cgauss$Pred, Values="Gaussian Fit"),
+                mutate(clnorm$Pred, Values="Log-normal Fit") )
 
 ## Plot results
 etxt <- function(s, ...) {element_text( size = s, face = "bold", ... )}
-gg <- ggplot(mapping = aes(Date, New, fill=Values)) + theme_bw() +
+pal <- c("Observed"="gray", "Gaussian Fit"="tomato", "Log-normal Fit"="steelblue")
+gg <- ggplot(mapping = aes(Date, New, fill=Values, color=Values)) +
   geom_bar( data=subset(P, Values=="Observed"), stat="identity" ) +
-  geom_line( data=subset(P, Values=="Gaussian Fit"), color="tomato", size=1.25 ) +
-  ylab( "New Cases in the U.S." ) +
-  scale_fill_manual( values=c("Observed"="gray", "Gaussian Fit"="tomato") ) +
+  geom_line( data=subset(P, Values!="Observed"), size=1.25 ) +
+  scale_fill_manual(values=pal) + scale_color_manual(values=pal) +
   scale_x_date(date_breaks="2 days", date_labels="%b %d") +
+  ylab( "New Cases in the U.S." ) + theme_bw() +
   theme( axis.text.y = etxt(12), axis.title = etxt(14),
          axis.text.x = etxt(12, angle=90, hjust=1, vjust=0.5),
          legend.text = etxt(12), legend.title = etxt(14) )
