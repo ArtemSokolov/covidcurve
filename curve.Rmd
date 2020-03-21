@@ -8,7 +8,6 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library( tidyverse )
-
 ```
 
 ```{r echo=FALSE, warning=FALSE}
@@ -27,43 +26,51 @@ rawUS <- filter( rawAll, Country == "US" ) %>%
   mutate_at( "Date", lubridate::mdy )
 
 ## It appears that the most consistent tracking for the US began around 2/27
-dStart <- lubridate::mdy("2/27/2020")
+## Using the day before to remove the extra +/-1 in date arithmetic below
+dStart <- lubridate::mdy("2/26/2020")
 
 ## Compute 1) new confirmed cases for each day and 
 ##         2) day offset from start date
 US <- rawUS %>% group_by( Date ) %>%
   summarize_at( "Confirmed", sum ) %>%
   arrange( Date ) %>%
-  mutate( New = c(0,diff(Confirmed)),
-          nDays = as.integer(Date - dStart)+1 ) %>%
-  filter(Date >= dStart)
+  mutate( New = c(0,diff(Confirmed)) ) %>%
+  filter(Date > dStart)
 
-## Define the parametric distribution to fit to data
-fdist <- function(x, m, s, w) {w * dnorm(x, m, s)}
-
-## Define the objective function
-fobj <- function(v)
-{
-    ypred <- fdist( US$nDays, v[1], v[2], v[3] )
-    err <- (ypred - US$New)^2
-    sqrt(mean(err))
+## Fits a curve and generates predictions for k days forward
+##   .df - data frame mapping Date -> Observation
+##   obs - column in .df with observation values
+##   f   - parametric distribution function
+##   v0  - initial parameter estimates
+##   k   - number of days to predict
+fitCurve <- function( .df, obs, f, v0, k=5 ) {
+  ## Compute day offset from start date
+  .df <- .df %>% transmute( x = 1:n(), y = {{obs}} )
+  
+  ## Define the RMSE objective function
+  fobj <- function(v) {(.df$y - f(.df$x, v))^2 %>% mean %>% sqrt}
+  
+  ## Optimize the objective function and compute predictions
+  fit <- optim(v0, fobj)
+  xp <- 1:(max(.df$x)+k)
+  list( Pred = tibble( Date = dStart + lubridate::days(xp),
+                       New = f(xp, fit$par) ),
+        RMSE = fit$value )
 }
 
-## Define the starting parameters and solve the optimization problem
-nd <- max(US$nDays)
-v0 <- c(nd, nd/2, max(US$New)*2)
-res <- optim( v0, fobj )
-param <- as.list(res$par) %>% set_names( c("m", "s", "w") )
+## Define parametric distributions to fit to data
+fgauss <- function(x, p) {p[1] * dnorm(x, p[2], p[3])}
+flnorm <- function(x, m, s, w, b) {w * dlnorm(x-b, m, s)}
 
-## Compute predictions for k days ahead
-k <- 5
-Pred <- tibble( nDays = 1:(nd+k),
-                New = partial(fdist, !!!param)(nDays),
-                Date = dStart + lubridate::days(nDays-1),
-                Values = "Gaussian Fit" )
+##optim( c(5,1,1e5,0), fobj2 )
+
+## Define the starting parameters and fit curves
+v0 <- c(max(US$New)*2, nrow(US), nrow(US)/2)
+cgauss <- fitCurve( US, New, fgauss, v0 )
 
 ## Combine with observed data
-P <- US %>% mutate(Values = "Observed") %>% bind_rows(Pred)
+P <- bind_rows( mutate(US,          Values="Observed"),
+                mutate(cgauss$Pred, Values="Gaussian Fit") )
 
 ## Plot results
 etxt <- function(s, ...) {element_text( size = s, face = "bold", ... )}
