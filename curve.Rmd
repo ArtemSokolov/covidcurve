@@ -8,9 +8,10 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library( tidyverse )
+
 ```
 
-```{r}
+```{r echo=FALSE, warning=FALSE}
 ## Load the raw data
 rawAll <- file.path("https://raw.githubusercontent.com/CSSEGISandData/COVID-19",
                   "master/csse_covid_19_data/csse_covid_19_time_series",
@@ -24,63 +25,65 @@ rawUS <- filter( rawAll, Country == "US" ) %>%
   gather( Date, Confirmed, -State ) %>%
   na.omit() %>%
   mutate_at( "Date", lubridate::mdy )
-```
 
+## It appears that the most consistent tracking for the US began around 2/27
+dStart <- lubridate::mdy("2/27/2020")
 
-```{r}
-## Compute total and new confirmed cases for each day
-computeNew <- function(X) {
-  X %>% group_by( Date ) %>%
-    summarize_at( "Confirmed", sum ) %>%
-    arrange( Date ) %>%
-    mutate( New = c(0,diff(Confirmed)) )
-}
+## Compute 1) new confirmed cases for each day and 
+##         2) day offset from start date
+US <- rawUS %>% group_by( Date ) %>%
+  summarize_at( "Confirmed", sum ) %>%
+  arrange( Date ) %>%
+  mutate( New = c(0,diff(Confirmed)),
+          nDays = as.integer(Date - dStart)+1 ) %>%
+  filter(Date >= dStart)
 
-plotBase <- function(X) {
-  X1 <- X %>% rename( Total = Confirmed ) %>%
-    gather( Category, Confirmed, New, Total )
-  ggplot( X1, aes(x=Date, y=Confirmed) ) +
-    facet_wrap(~Category, nrow=1) + theme_bw() +
-    geom_bar(stat="identity")
-}
-```
+## Define the parametric distribution to fit to data
+fdist <- function(x, m, s, w) {w * dnorm(x, m, s)}
 
-```{r}
-## It appears that the most consistent tracking began around 2/27
-## We'll use that for fitting
-## For each day, compute the number of days since start of study
-US <- computeNew(rawUS) %>% filter(Date >= lubridate::mdy("2/27/2020")) %>%
-    mutate(nDays = as.integer(Date - lubridate::mdy("2/26/2020")))
-plotBase(US) + ggtitle("US cases") +
-    scale_y_continuous( trans = 'log10' )
-```
-
-```{r}
 ## Define the objective function
-flnorm <- function(x, m, s, w) {w * dnorm(x, m, s)}
-
 fobj <- function(v)
 {
-    ypred <- flnorm( US$nDays, v[1], v[2], v[3] )
+    ypred <- fdist( US$nDays, v[1], v[2], v[3] )
     err <- (ypred - US$New)^2
     sqrt(mean(err))
 }
 
-res <- optim( c(25,10,1e5), fobj )
-
+## Define the starting parameters and solve the optimization problem
+nd <- max(US$nDays)
+v0 <- c(nd, nd/2, max(US$New)*2)
+res <- optim( v0, fobj )
 param <- as.list(res$par) %>% set_names( c("m", "s", "w") )
 
-Pred <- tibble( nDays = 1:(max(US$nDays)+5),
-                New = partial(flnorm, !!!param)(nDays),
-                Date = lubridate::mdy("02/26/2020") + 
-                  lubridate::days(nDays),
-                Type = "Prediction" )
+## Compute predictions for k days ahead
+k <- 5
+Pred <- tibble( nDays = 1:(nd+k),
+                New = partial(fdist, !!!param)(nDays),
+                Date = dStart + lubridate::days(nDays-1),
+                Values = "Model Fit" )
 
-X <- select( US, Date, nDays, New ) %>% mutate(Type = "US Cases") %>%
-  bind_rows(Pred)
+## Combine with observed data
+P <- US %>% mutate(Values = "Observed") %>% bind_rows(Pred)
 
-ggplot(mapping = aes(Date, New)) + theme_bw() +
-  geom_bar( data=subset(X, Type=="US Cases"), stat="identity") +
-  geom_line( data=subset(X, Type=="Prediction"), color="red", size=1.25 )
+## Plot results
+etxt <- function(s, ...) {element_text( size = s, face = "bold", ... )}
+ggplot(mapping = aes(Date, New, fill=Values)) + theme_bw() +
+  geom_bar( data=subset(P, Values=="Observed"), stat="identity" ) +
+  geom_line( data=subset(P, Values=="Model Fit"), color="tomato", size=1.25 ) +
+  ylab( "New Cases in the U.S." ) +
+  scale_fill_manual( values=c("Observed"="gray", "Model Fit"="tomato") ) +
+  scale_x_date(date_breaks="2 days", date_labels="%b %d") +
+  theme( axis.text.y = etxt(12), axis.title = etxt(14),
+         axis.text.x = etxt(12, angle=90, hjust=1, vjust=0.5),
+         legend.text = etxt(12), legend.title = etxt(14),
+         legend.position = "top" )
 
 ```
+
+Current parameters and assumptions:
+
+* Data source: [CSSE at Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data)
+
+* Distribution family: Gaussian
+
+* Start date used for model: `r dStart`
