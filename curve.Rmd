@@ -22,6 +22,7 @@ rawAll <- file.path("https://raw.githubusercontent.com/CSSEGISandData/COVID-19",
 rawUS <- filter( rawAll, Country == "US" ) %>%
   select( -Lat, -Long, -Country ) %>%
   gather( Date, Confirmed, -State ) %>%
+  na.omit() %>%
   mutate_at( "Date", lubridate::mdy )
 ```
 
@@ -56,22 +57,19 @@ plotBase(US) + ggtitle("US cases") +
 
 ```{r}
 ## Define the objective function
-flnorm <- function(x, m, s, w, b) {w * dlnorm( x+b, m, s )}
+flnorm <- function(x, w, b) {w * dlnorm( x+b, 0, 1 )}
 
 fobj <- function(v)
 {
     ypred <- flnorm( US$nDays, v[1], v[2], v[3], v[4] )
-    err <- log(ypred+1) - log(US$New+1)
-    sqrt(mean(err^2))
+    err <- abs(ypred - US$New)
+    mean(err)
 }
 
-res <- optim( c(1,1,1,-5), fobj ) %>%
-    .$par %>% set_names( c("m", "s", "w","b") ) %>%
-    as.list()
+res <- optim( c(1,1,1,0), fobj )
 
-X <- tibble( x=1:22 ) %>%
-    mutate( y = dlnorm(x-5, 1, 2) )
+param <- as.list(res$par) %>% set_names( c("m", "s", "w","b") )
 
-ggplot( X, aes(x,y) ) + geom_line()
+partial(flnorm, !!!param)(US$nDays)
 
 ```
