@@ -1,7 +1,6 @@
 ---
 title: "Fitting the COVID-19 curve"
-author: "Artem Sokolov"
-date: "Last Updated: `r Sys.Date()`"
+author: "Artem Sokolov (Last Updated: `r Sys.Date()`)"
 output: html_document
 ---
 
@@ -96,17 +95,19 @@ gg <-
          legend.text = etxt(12), legend.title = etxt(14) )
 
 plotly::ggplotly(gg, tooltip="text") %>% 
-  plotly::layout(legend = list(x=0.01, y=0.99, bordercolor="gray"))
+  plotly::layout(legend = list(x=0.01, y=0.99, bordercolor="gray"),
+                 xaxis = list(fixedrange=TRUE),
+                 yaxis = list(fixedrange=TRUE))
 ```
 
-### Goodness of fit
+***
 
 ```{r echo =FALSE}
 fits %>% map( pluck, "RMSE" ) %>% 
   enframe( "Model", "Root Mean Squared Error" ) %>% unnest() %>%
   knitr::kable("html") %>% kableExtra::column_spec(2, width="1.25in") %>%
   kableExtra::kable_styling(bootstrap_options = "striped",
-                            position="left",
+                            position="center",
                             full_width=FALSE)
 ```
 
