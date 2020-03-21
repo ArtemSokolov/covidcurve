@@ -87,12 +87,17 @@ v0 <- list(
 ## Fit the curves and combine predictions with observed data
 fits <- map2( ldist, v0, fcurve )
 P <- map( fits, pluck, "Pred" ) %>% c(list(Observed=US)) %>%
-  imap( ~mutate(.x, Values=.y) ) %>% bind_rows
+  imap( ~mutate(.x, Values=.y) ) %>% bind_rows %>%
+  mutate( Hover = str_c("Date: ", Date, "<br>",
+                        "New : ", as.integer(New), "<br>",
+                        Values) )
   
 ## Plot results
 etxt <- function(s, ...) {element_text( size = s, face = "bold", ... )}
 pal <- c("Observed"="gray", "Gaussian Fit"="tomato", "Log-normal Fit"="steelblue")
-gg <- ggplot(mapping = aes(Date, New, fill=Values, color=Values)) +
+gg <- 
+  ggplot(mapping = aes(Date, New, fill=Values, color=Values,
+                       group=Values, text=Hover)) +
   geom_bar( data=subset(P, Values=="Observed"), stat="identity" ) +
   geom_line( data=subset(P, Values!="Observed"), size=1.25 ) +
   scale_fill_manual(values=pal) + scale_color_manual(values=pal) +
@@ -102,7 +107,8 @@ gg <- ggplot(mapping = aes(Date, New, fill=Values, color=Values)) +
          axis.text.x = etxt(12, angle=90, hjust=1, vjust=0.5),
          legend.text = etxt(12), legend.title = etxt(14) )
 
-plotly::ggplotly(gg) %>% plotly::layout(legend = list(orientation="h", y=100))
+plotly::ggplotly(gg, tooltip="text") %>% 
+  plotly::layout(legend = list(orientation="h", y=100))
 ```
 
 <div class="column-left">
