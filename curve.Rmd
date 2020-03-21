@@ -84,6 +84,10 @@ Current parameters and assumptions:
 
 * Data source: [CSSE at Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data)
 
-* Distribution family: Gaussian
+* Source code: https://github.com/ArtemSokolov/covidcurve
 
-* Start date used for model: `r dStart`
+* Start date used for the model: `r dStart`
+
+* Fit distribution family: Gaussian
+
+* Optimization criterion: RMSE
