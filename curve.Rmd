@@ -5,17 +5,6 @@ date: "Last Updated: `r Sys.Date()`"
 output: html_document
 ---
 
-<style>
-.column-left{
-  float: left;
-  width: 50%;
-}
-.column-right{
-  float: right;
-  width: 50%;
-}
-</style>
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library( tidyverse )
@@ -107,11 +96,11 @@ gg <-
          legend.text = etxt(12), legend.title = etxt(14) )
 
 plotly::ggplotly(gg, tooltip="text") %>% 
-  plotly::layout(legend = list(orientation="h", y=100))
+  plotly::layout(legend = list(x=0.01, y=0.99, bordercolor="gray"))
 ```
 
-<div class="column-left">
 ### Goodness of fit
+
 ```{r echo =FALSE}
 fits %>% map( pluck, "RMSE" ) %>% 
   enframe( "Model", "Root Mean Squared Error" ) %>% unnest() %>%
@@ -120,13 +109,10 @@ fits %>% map( pluck, "RMSE" ) %>%
                             position="left",
                             full_width=FALSE)
 ```
-</div>
 
-<div class="column-right">
-### References
+***
 
-* Data: [CSSE at Johns Hopkins University](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data)
+**References:**
+[[Data](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data)]
+[[Code](https://github.com/ArtemSokolov/covidcurve)]
 
-* Code: https://github.com/ArtemSokolov/covidcurve
-
-</div>
