@@ -97,7 +97,6 @@ gg <-
 
 plotly::ggplotly(gg, tooltip="text") %>% 
   plotly::layout(legend = list(x=0.01, y=0.99, bordercolor="gray"),
-                 xaxis = list(fixedrange=TRUE),
                  yaxis = list(fixedrange=TRUE))
 ```
 
