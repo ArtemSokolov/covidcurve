@@ -5,33 +5,28 @@ output: html_document
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 library( tidyverse )
 ```
 
-```{r echo=FALSE, warning=FALSE, out.width='100%'}
-## Load the raw data
-rawAll <- file.path("https://raw.githubusercontent.com/CSSEGISandData/COVID-19",
-                  "master/csse_covid_19_data/csse_covid_19_time_series",
-                  "time_series_covid19_confirmed_global.csv") %>%
-  read_csv( col_types=cols() ) %>%
-  rename( State = 1, Country = 2 )
+Undoubtedly, we’ve all heard about “flattening the curve”, where the goal is to slow the rate of new COVID-19 infections by limiting person-to-person contacts. A related question is what the curve even looks like right now. Is it accelerating or slowing down? When is the peak expected to occur? Since data collection became more systematic, we are in a position to begin answering some of these questions by looking for trends in the values observed so far.
 
-## Identify the US slice
-rawUS <- filter( rawAll, Country == "US" ) %>%
-  select( -Lat, -Long, -Country, -State ) %>%
-  gather( Date, Confirmed ) %>%
-  mutate_at( "Date", lubridate::mdy )
+Below, I apply some very basic curve fitting to model new COVID-19 cases in the U.S. over time. The data is taken from [The COVID Tracking Project](https://covidtracking.com/). I chose to fit a log-normal distribution, which is [traditionally used by epidemilogists](https://www.cdc.gov/csels/dsepd/ss1978/lesson1/section11.html) to model cases by date of onset. The curve has an asymmetric bell-like shape with a rapid increase in new cases at the start, followed by a more gradual decrease over time.
 
-## It appears that the most consistent tracking for the US began around 2/27
-## Using the day before to remove the extra +/-1 in date arithmetic below
-dStart <- lubridate::mdy("2/26/2020")
+After fitting the curve, I use it to plot projections for five days in the future. It probably goes without saying, but this is a pet project I started while being in lockdown. The predictions presented here are mostly to satisfy my own curiosity and should be taken with a grain of salt, since they don’t account for the many factors at play in a rapidly-changing situation. With that said, I will aim to re-run the script daily to fit new data points as they become available.
 
-## Compute new confirmed cases for each day
-US <- rawUS %>% 
+The plot is interactive and best viewed on a computer, where you can hover a mouse pointer over individual points, as well as click and drag to pan and zoom around. The functionality is more limited on a mobile screen and seems to vary from device to device, but the interactivity is still largely there. Consequently, the plotting area prevents you from scrolling with your finger; swipe along the edges of the plot to scroll instead.
+
+
+```{r warning=FALSE, out.width='100%'}
+## Load the raw data from The COVID Tracking Project
+## Compute new confirmed cases for each day / data source combo
+US <- read_csv("https://covidtracking.com/api/us/daily.csv",
+                   col_types=cols(date=col_character())) %>%
+  transmute( Date = lubridate::ymd(date), Confirmed = positive ) %>%
   arrange( Date ) %>%
   mutate( New = c(0,diff(Confirmed)) ) %>%
-  filter( Date > dStart )
+  tail(-1)    ## No info prior to 03/04, so can't compute new cases
 
 ## Fits a curve and generates predictions for k days forward
 ##   .df - data frame mapping Date -> Observation
@@ -41,6 +36,7 @@ US <- rawUS %>%
 ##   k   - number of days to predict
 fitCurve <- function( .df, obs, f, v0, k=5 ) {
   ## Compute day offset from start date
+  dStart <- .df$Date[1]
   .df <- .df %>% transmute( x = 1:n(), y = {{obs}} )
   
   ## Define the RMSE objective function
@@ -49,37 +45,26 @@ fitCurve <- function( .df, obs, f, v0, k=5 ) {
   ## Optimize the objective function and compute predictions
   fit <- optim(v0, fobj)
   xp <- 1:(max(.df$x)+k)
-  list( Pred = tibble( Date = dStart + lubridate::days(xp),
+  list( pred = tibble( Date = dStart+lubridate::days(xp-1),
                        New = f(xp, fit$par) ),
-        RMSE = fit$value )
+        rmse = fit$value, param = fit$par )
 }
 
-## Will be fitting New Cases column in US data
-fcurve <- partial( fitCurve, US, New )
+## Fit a log-normal distribution to New column in US data
+fdist <- function(x, p) {p[1] * dlnorm(x-p[2], p[3], p[4])}
+v0 <- c(max(US$New)*2, 0, 4, 1)
+fit <- fitCurve( US, New, fdist, v0 )
 
-## Define parametric distributions to fit to data
-ldist <- list(
-  "Gaussian Fit"   = function(x, p) {p[1] * dnorm(x, p[2], p[3])},
-  "Log-normal Fit" = function(x, p) {p[1] * dlnorm(x-p[2], p[3], p[4])}
-)
-
-## Define starting parameters for each optimization problem
-v0 <- list(
-  c(max(US$New)*2, nrow(US)*2, nrow(US)/2),
-  c(max(US$New)*2, 0, 5, 1)
-)
-
-## Fit the curves and combine predictions with observed data
-fits <- map2( ldist, v0, fcurve )
-P <- map( fits, pluck, "Pred" ) %>% c(list(Observed=US)) %>%
-  imap( ~mutate(.x, Values=.y) ) %>% bind_rows %>%
+## Combine predictions with observed data
+P <- bind_rows( mutate(US, Values="Observed"),
+                mutate(fit$pred, Values="Fit") ) %>%
   mutate( Hover = str_c("Date: ", Date, "<br>",
                         "New : ", as.integer(New), "<br>",
                         Values) )
   
 ## Plot results
 etxt <- function(s, ...) {element_text( size = s, face = "bold", ... )}
-pal <- c("Observed"="gray", "Gaussian Fit"="tomato", "Log-normal Fit"="steelblue")
+pal <- c("Observed"="gray", "Fit"="steelblue")
 gg <- 
   ggplot(mapping = aes(Date, New, fill=Values, color=Values,
                        group=Values, text=Hover)) +
@@ -99,18 +84,7 @@ plotly::ggplotly(gg, tooltip="text") %>%
 
 ***
 
-```{r echo =FALSE}
-fits %>% map( pluck, "RMSE" ) %>% 
-  enframe( "Model", "Root Mean Squared Error" ) %>% unnest() %>%
-  knitr::kable("html") %>% kableExtra::column_spec(2, width="1.25in") %>%
-  kableExtra::kable_styling(bootstrap_options = "striped",
-                            position="center",
-                            full_width=FALSE)
-```
-
-***
-
 **References:**
-[[Data](https://github.com/CSSEGISandData/COVID-19/tree/master/csse_covid_19_data)]
+[[Data](https://covidtracking.com/)]
 [[Code](https://github.com/ArtemSokolov/covidcurve)]
 
