@@ -36,7 +36,7 @@ US <- read_csv("https://covidtracking.com/api/us/daily.csv",
 ##   k   - number of days to predict
 fitCurve <- function( .df, obs, f, v0, k=5 ) {
   ## Compute day offset from start date
-  dStart <- .df$Date[1]
+  dStart <- min(.df$Date)
   .df <- .df %>% transmute( x = 1:n(), y = {{obs}} )
   
   ## Define the RMSE objective function
