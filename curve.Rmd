@@ -7,84 +7,18 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 library( tidyverse )
+
+## Common set of elements used through the plots
+theme_covid <- function()
+  list( scale_x_date(date_breaks="2 days", date_labels="%b %d"),
+        scale_y_continuous(name="New Cases in the U.S.", labels=scales::label_number_si()),
+        theme_bw() + 
+          theme(axis.text.y = etxt(12), axis.title = etxt(14),
+                axis.text.x = etxt(12, angle=90, hjust=1, vjust=0.5),
+                legend.text = etxt(12), legend.title = etxt(14)) )
 ```
 
-Undoubtedly, we’ve all heard about “flattening the curve”: the goal of slowing the rate of new COVID-19 infections by limiting person-to-person contacts. A related question is what the curve even looks like right now. Is it accelerating or slowing down? When is the peak expected to occur? Since data collection became more systematic, we are in a position to view these questions through the lens of values observed so far.
-
-Below, I apply simple curve fitting to model new COVID-19 cases in the U.S. over time. The data is taken from [The COVID Tracking Project](https://covidtracking.com/). I chose to fit a log-normal distribution, which is [traditionally used by epidemilogists](https://www.cdc.gov/csels/dsepd/ss1978/lesson1/section11.html) to study cases by date of onset. The curve has an asymmetric bell-like shape with a rapid increase in new cases at the start, followed by a more gradual decrease over time.
-
-After fitting the curve, I use it to plot projections for five days in the future. These predictions are a pet project to satisfy my own curiosity and should be taken with a grain of salt, since they don’t account for the many factors at play in a rapidly-changing situation. With that said, I aim to re-run the script daily to fit new data points as they become available.
-
-The plot is interactive and best viewed on a computer, where you can hover a mouse pointer over individual points, as well as click and drag to pan and zoom around. The functionality is more limited on a mobile screen and varies from device to device. On some devices, the plotting area prevents you from scrolling with your finger; swipe along the edges of the plot to scroll instead.
-
-
-```{r warning=FALSE, out.width='100%'}
-## Load the raw data from The COVID Tracking Project
-## Compute new confirmed cases for each day / data source combo
-US <- read_csv("https://covidtracking.com/api/us/daily.csv",
-                   col_types=cols(date=col_character())) %>%
-  transmute( Date = lubridate::ymd(date), Confirmed = positive ) %>%
-  arrange( Date ) %>%
-  mutate( New = c(0,diff(Confirmed)) ) %>%
-  tail(-1)    ## No info prior to 03/04, so can't compute new cases
-
-## Fits a curve and generates predictions for k days forward
-##   .df - data frame mapping Date -> Observation
-##   obs - column in .df with observation values
-##   f   - parametric distribution function
-##   v0  - initial parameter estimates
-##   k   - number of days to predict
-fitCurve <- function( .df, obs, f, v0, k=5 ) {
-  ## Compute day offset from start date
-  dStart <- min(.df$Date)
-  .df <- .df %>% transmute( x = 1:n(), y = {{obs}} )
-  
-  ## Define the RMSE objective function
-  fobj <- function(v) {(.df$y - f(.df$x, v))^2 %>% mean %>% sqrt}
-  
-  ## Optimize the objective function and compute predictions
-  fit <- optim(v0, fobj)
-  xp <- 1:(max(.df$x)+k)
-  list( pred = tibble( Date = dStart+lubridate::days(xp-1),
-                       New = f(xp, fit$par) ),
-        rmse = fit$value, param = fit$par )
-}
-
-## Fit a log-normal distribution to New column in US data
-fdist <- function(x, p) {p[1] * dlnorm(x-p[2], p[3], p[4])}
-v0 <- c(max(US$New)*2, 0, 4, 1)
-fit <- fitCurve( US, New, fdist, v0 )
-
-## Combine predictions with observed data
-P <- bind_rows( mutate(US, Values="Observed"),
-                mutate(fit$pred, Values="Fit") ) %>%
-  mutate( Hover = str_c("Date: ", Date, "<br>",
-                        "New : ", as.integer(New), "<br>",
-                        Values) )
-  
-## Plot results
-etxt <- function(s, ...) {element_text( size = s, face = "bold", ... )}
-pal <- c("Observed"="gray", "Fit"="steelblue")
-gg <- 
-  ggplot(mapping = aes(Date, New, fill=Values, color=Values,
-                       group=Values, text=Hover)) +
-  geom_bar( data=subset(P, Values=="Observed"), stat="identity" ) +
-  geom_line( data=subset(P, Values!="Observed"), size=1.25 ) +
-  scale_fill_manual(values=pal) + scale_color_manual(values=pal) +
-  scale_x_date(date_breaks="2 days", date_labels="%b %d") +
-  scale_y_continuous( name="New Cases in the U.S.", labels=scales::label_number_si() ) + 
-  theme_bw() +
-  theme( axis.text.y = etxt(12), axis.title = etxt(14),
-         axis.text.x = etxt(12, angle=90, hjust=1, vjust=0.5),
-         legend.text = etxt(12), legend.title = etxt(14) )
-
-plotly::ggplotly(gg, tooltip="text") %>% 
-  plotly::layout(legend = list(x=0.01, y=0.99, bordercolor="gray"))
-```
-
-***
-
-```{r include=FALSE}
+```{r data, include=FALSE}
 rawData <- list()
 
 ## Load John Hopkins data
@@ -112,25 +46,89 @@ rawData$NYT <- file.path("https://raw.githubusercontent.com/nytimes",
   summarize( Confirmed = sum(cases) )
 
 ## Reduce to the earliest common date
-dStart <- map(rawData, with, min(Date)) %>% lift(max)()
-USall <- bind_rows(rawData, .id="Source") %>% filter( Date >= dStart )
-
 ## Compute new confirmed cases for each day / data source combo
-US <- USall %>% group_by(Source) %>%
+dStart <- map(rawData, with, min(Date)) %>% lift(max)()
+USall <- bind_rows(rawData, .id="Source") %>% 
+  filter( Date >= dStart ) %>%
+  group_by(Source) %>%
   arrange( Date ) %>%
   mutate( New = c(0,diff(Confirmed)) ) %>%
   ungroup %>%
   filter( Date > dStart )    # Remove the leading zeroes
+```
 
-## Common set of elements used through the plots
-theme_covid <- function()
-  list( scale_x_date(date_breaks="2 days", date_labels="%b %d"),
-        scale_y_continuous(name="New Cases in the U.S.", labels=scales::label_number_si()),
-        theme_bw() )
+Undoubtedly, we’ve all heard about “flattening the curve”: the goal of slowing the rate of new COVID-19 infections by limiting person-to-person contacts. A related question is what the curve even looks like right now. Is it accelerating or slowing down? When is the peak expected to occur? Since data collection became more systematic, we are in a position to view these questions through the lens of values observed so far.
 
+Below, I apply simple curve fitting to model new COVID-19 cases in the U.S. over time. The data is aggregated from three different sources (see below). I chose to fit a log-normal distribution, which is [traditionally used by epidemilogists](https://www.cdc.gov/csels/dsepd/ss1978/lesson1/section11.html) to study cases by date of onset. The curve has an asymmetric bell-like shape with a rapid increase in new cases at the start, followed by a more gradual decrease over time.
+
+After fitting the curve, I use it to plot projections for five days in the future. These predictions are a pet project to satisfy my own curiosity and should be taken with a grain of salt, since they don’t account for the many factors at play in a rapidly-changing situation. With that said, I aim to re-run the script daily to fit new data points as they become available.
+
+The plot is interactive and best viewed on a computer, where you can hover a mouse pointer over individual points, as well as click and drag to pan and zoom around. The functionality is more limited on a mobile screen and varies from device to device. On some devices, the plotting area prevents you from scrolling with your finger; swipe along the edges of the plot to scroll instead.
+
+
+```{r warning=FALSE, out.width='100%'}
+## Use the median value for each day across the three datasets
+US <- USall %>% group_by(Date) %>%
+  summarize_at("New", median)
+
+## Fits a curve and generates predictions for k days forward
+##   .df - data frame mapping Date -> Observation
+##   obs - column in .df with observation values
+##   f   - parametric distribution function
+##   v0  - initial parameter estimates
+##   k   - number of days to predict
+fitCurve <- function( .df, obs, f, v0, k=5 ) {
+  ## Compute day offset from start date
+  .df <- .df %>% transmute( x = 1:n(), y = {{obs}} )
+  
+  ## Define the RMSE objective function
+  fobj <- function(v) {(.df$y - f(.df$x, v))^2 %>% mean %>% sqrt}
+  
+  ## Optimize the objective function and compute predictions
+  fit <- optim(v0, fobj)
+  xp <- 1:(max(.df$x)+k)
+  list( pred = tibble( Date = dStart+lubridate::days(xp),
+                       New = f(xp, fit$par) ),
+        rmse = fit$value, param = fit$par )
+}
+
+## Fit a log-normal distribution to New column in US data
+fdist <- function(x, p) {p[1] * dlnorm(x-p[2], p[3], p[4])}
+v0 <- c(max(US$New)*5, 0, 3, 1)
+fit <- fitCurve( US, New, fdist, v0 )
+
+## Combine predictions with observed data
+P <- bind_rows( mutate(US, Values="Observed"),
+                mutate(fit$pred, Values="Fit") ) %>%
+  mutate( Hover = str_c("Date: ", Date, "<br>",
+                        "New : ", as.integer(New), "<br>",
+                        Values) )
+  
+## Plot results
+etxt <- function(s, ...) {element_text( size = s, face = "bold", ... )}
+pal <- c("Observed"="gray", "Fit"="steelblue")
+gg <- ggplot(mapping = aes(Date, New, fill=Values, color=Values,
+                           group=Values, text=Hover)) +
+  geom_bar( data=subset(P, Values=="Observed"), stat="identity" ) +
+  geom_line( data=subset(P, Values!="Observed"), size=1.25 ) +
+  scale_fill_manual(values=pal) + scale_color_manual(values=pal) +
+  theme_covid()
+
+plotly::ggplotly(gg, tooltip="text") %>% 
+  plotly::layout(legend = list(x=0.01, y=0.99, bordercolor="gray"))
+```
+
+***
+
+## Data Sources
+
+```{r out.width='100%'}
 ## Plot all data side-by-side
-ggplot( US, aes(Date, New, color=Source) ) + geom_point(size=2) +
-  theme_covid() + ggthemes::scale_color_few()
+gg2 <- ggplot( USall, aes(Date, New, color=Source) ) + geom_point(size=2) +
+  ggthemes::scale_color_few() + theme_covid()
+
+plotly::ggplotly(gg2) %>% 
+  plotly::layout(legend = list(x=0.01, y=0.99, bordercolor="gray"))
 ```
 
 ***
