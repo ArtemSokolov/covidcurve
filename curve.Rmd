@@ -9,13 +9,13 @@ knitr::opts_chunk$set(echo = FALSE)
 library( tidyverse )
 ```
 
-Undoubtedly, we’ve all heard about “flattening the curve”, where the goal is to slow the rate of new COVID-19 infections by limiting person-to-person contacts. A related question is what the curve even looks like right now. Is it accelerating or slowing down? When is the peak expected to occur? Since data collection became more systematic, we are in a position to begin answering some of these questions by looking for trends in the values observed so far.
+Undoubtedly, we’ve all heard about “flattening the curve”: the goal of slowing the rate of new COVID-19 infections by limiting person-to-person contacts. A related question is what the curve even looks like right now. Is it accelerating or slowing down? When is the peak expected to occur? Since data collection became more systematic, we are in a position to view these questions through the lens of values observed so far.
 
-Below, I apply some very basic curve fitting to model new COVID-19 cases in the U.S. over time. The data is taken from [The COVID Tracking Project](https://covidtracking.com/). I chose to fit a log-normal distribution, which is [traditionally used by epidemilogists](https://www.cdc.gov/csels/dsepd/ss1978/lesson1/section11.html) to model cases by date of onset. The curve has an asymmetric bell-like shape with a rapid increase in new cases at the start, followed by a more gradual decrease over time.
+Below, I apply simple curve fitting to model new COVID-19 cases in the U.S. over time. The data is taken from [The COVID Tracking Project](https://covidtracking.com/). I chose to fit a log-normal distribution, which is [traditionally used by epidemilogists](https://www.cdc.gov/csels/dsepd/ss1978/lesson1/section11.html) to study cases by date of onset. The curve has an asymmetric bell-like shape with a rapid increase in new cases at the start, followed by a more gradual decrease over time.
 
-After fitting the curve, I use it to plot projections for five days in the future. It probably goes without saying, but this is a pet project I started while being in lockdown. The predictions presented here are mostly to satisfy my own curiosity and should be taken with a grain of salt, since they don’t account for the many factors at play in a rapidly-changing situation. With that said, I will aim to re-run the script daily to fit new data points as they become available.
+After fitting the curve, I use it to plot projections for five days in the future. These predictions are a pet project to satisfy my own curiosity and should be taken with a grain of salt, since they don’t account for the many factors at play in a rapidly-changing situation. With that said, I aim to re-run the script daily to fit new data points as they become available.
 
-The plot is interactive and best viewed on a computer, where you can hover a mouse pointer over individual points, as well as click and drag to pan and zoom around. The functionality is more limited on a mobile screen and seems to vary from device to device, but the interactivity is still largely there. Consequently, the plotting area prevents you from scrolling with your finger; swipe along the edges of the plot to scroll instead.
+The plot is interactive and best viewed on a computer, where you can hover a mouse pointer over individual points, as well as click and drag to pan and zoom around. The functionality is more limited on a mobile screen and varies from device to device. On some devices, the plotting area prevents you from scrolling with your finger; swipe along the edges of the plot to scroll instead.
 
 
 ```{r warning=FALSE, out.width='100%'}
@@ -80,6 +80,57 @@ gg <-
 
 plotly::ggplotly(gg, tooltip="text") %>% 
   plotly::layout(legend = list(x=0.01, y=0.99, bordercolor="gray"))
+```
+
+***
+
+```{r include=FALSE}
+rawData <- list()
+
+## Load John Hopkins data
+rawData$JHU <- file.path("https://raw.githubusercontent.com/CSSEGISandData/COVID-19",
+                         "master/csse_covid_19_data/csse_covid_19_time_series",
+                         "time_series_covid19_confirmed_global.csv") %>%
+  read_csv( col_types=cols() ) %>%
+  rename( State = 1, Country = 2 ) %>%
+  filter( Country == "US" ) %>%
+  select( -Lat, -Long, -Country, -State ) %>%
+  gather( Date, Confirmed ) %>%
+  mutate_at( "Date", lubridate::mdy )
+
+## Load COVID Tracking Project data
+rawData$CTP <- read_csv("https://covidtracking.com/api/us/daily.csv",
+                        col_types=cols(date=col_character())) %>%
+  transmute( Date = lubridate::ymd(date), Confirmed = positive )
+
+## Load New York Times data
+rawData$NYT <- file.path("https://raw.githubusercontent.com/nytimes",
+                         "covid-19-data/master/us-states.csv") %>%
+  read_csv( col_types=cols() ) %>%
+  rename( Date = date ) %>%
+  group_by( Date ) %>%
+  summarize( Confirmed = sum(cases) )
+
+## Reduce to the earliest common date
+dStart <- map(rawData, with, min(Date)) %>% lift(max)()
+USall <- bind_rows(rawData, .id="Source") %>% filter( Date >= dStart )
+
+## Compute new confirmed cases for each day / data source combo
+US <- USall %>% group_by(Source) %>%
+  arrange( Date ) %>%
+  mutate( New = c(0,diff(Confirmed)) ) %>%
+  ungroup %>%
+  filter( Date > dStart )    # Remove the leading zeroes
+
+## Common set of elements used through the plots
+theme_covid <- function()
+  list( scale_x_date(date_breaks="2 days", date_labels="%b %d"),
+        scale_y_continuous(name="New Cases in the U.S.", labels=scales::label_number_si()),
+        theme_bw() )
+
+## Plot all data side-by-side
+ggplot( US, aes(Date, New, color=Source) ) + geom_point(size=2) +
+  theme_covid() + ggthemes::scale_color_few()
 ```
 
 ***
