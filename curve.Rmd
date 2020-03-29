@@ -94,7 +94,7 @@ fitCurve <- function( .df, obs, f, v0, k=5 ) {
 
 ## Fit a log-normal distribution to New column in US data
 fdist <- function(x, p) {p[1] * dlnorm(x-p[2], p[3], p[4])}
-v0 <- c(max(US$New)*5, 0, 3, 1)
+v0 <- c(max(US$New)*10, nrow(US)/10, 3, 0.5)
 fit <- fitCurve( US, New, fdist, v0 )
 
 ## Combine predictions with observed data
@@ -122,6 +122,8 @@ plotly::ggplotly(gg, tooltip="text") %>%
 
 ## Data Sources
 
+The observed data is aggregated across three data sources: John Hopkins University ([JHU](https://github.com/CSSEGISandData/COVID-19)), The COVID Tracking Project ([CTP](https://covidtracking.com/)), and The New York Times ([NYT](https://github.com/nytimes/covid-19-data)). The reason for aggregation is to smooth out any small discrepancies in reporting. For example, in the plot below you may notice that the number of cases was under-reported for Mar 18th and over-reported for Mar 19th by JHU, relative to the other two data sources. (This is likely due to time zone differences.) To reduce the effect of such artifacts, the curve is fit to the median values computed for each date.
+
 ```{r out.width='100%'}
 ## Plot all data side-by-side
 gg2 <- ggplot( USall, aes(Date, New, color=Source) ) + geom_point(size=2) +
@@ -134,6 +136,8 @@ plotly::ggplotly(gg2) %>%
 ***
 
 **References:**
-[[Data](https://covidtracking.com/)]
+[[JHU Data](https://github.com/CSSEGISandData/COVID-19)]
+[[CTP Data](https://covidtracking.com/)]
+[[NYT Data](https://github.com/nytimes/covid-19-data)]
 [[Code](https://github.com/ArtemSokolov/covidcurve)]
 
