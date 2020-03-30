@@ -93,9 +93,13 @@ fitCurve <- function( .df, obs, f, v0, k=5 ) {
 }
 
 ## Fit a log-normal distribution to New column in US data
+## Use yesterday's fit as a starting point 
 fdist <- function(x, p) {p[1] * dlnorm(x-p[2], p[3], p[4])}
-v0 <- c(max(US$New)*10, nrow(US)/10, 3, 0.5)
+v0 <- scan("lastfit.txt")
 fit <- fitCurve( US, New, fdist, v0 )
+
+## Store today's fit to serve as tomorrow's starting point
+cat( fit$param, sep="\n", file="lastfit.txt" )
 
 ## Combine predictions with observed data
 P <- bind_rows( mutate(US, Values="Observed"),
