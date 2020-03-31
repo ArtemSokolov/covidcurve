@@ -9,6 +9,7 @@ knitr::opts_chunk$set(echo = FALSE)
 library( tidyverse )
 
 ## Common set of elements used through the plots
+etxt <- function(s, ...) {element_text( size = s, face = "bold", ... )}
 theme_covid <- function()
   list( scale_x_date(date_breaks="2 days", date_labels="%b %d"),
         scale_y_continuous(name="New Cases in the U.S.", labels=scales::label_number_si()),
@@ -109,7 +110,6 @@ P <- bind_rows( mutate(US, Values="Observed"),
                         Values) )
   
 ## Plot results
-etxt <- function(s, ...) {element_text( size = s, face = "bold", ... )}
 pal <- c("Observed"="gray", "Fit"="steelblue")
 gg <- ggplot(mapping = aes(Date, New, fill=Values, color=Values,
                            group=Values, text=Hover)) +
