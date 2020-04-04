@@ -62,7 +62,7 @@ Undoubtedly, we’ve all heard about “flattening the curve”: the goal of slo
 
 Below, I apply simple curve fitting to model new COVID-19 cases in the U.S. over time. The data is aggregated from three different sources (see below). I chose to fit a log-normal distribution, which is [traditionally used by epidemilogists](https://www.cdc.gov/csels/dsepd/ss1978/lesson1/section11.html) to study cases by date of onset. The curve has an asymmetric bell-like shape with a rapid increase in new cases at the start, followed by a more gradual decrease over time.
 
-After fitting the curve, I use it to plot projections for five days in the future. These predictions are a pet project to satisfy my own curiosity and should be taken with a grain of salt, since they don’t account for the many factors at play in a rapidly-changing situation. With that said, I aim to re-run the script daily to fit new data points as they become available.
+After fitting the curve, I use it to plot projections for one week in the future. These predictions are a pet project to satisfy my own curiosity and should be taken with a grain of salt, since they don’t account for the many factors at play in a rapidly-changing situation. With that said, I aim to re-run the script daily to fit new data points as they become available.
 
 The plot is interactive and best viewed on a computer, where you can hover a mouse pointer over individual points, as well as click and drag to pan and zoom around. The functionality is more limited on a mobile screen and varies from device to device. On some devices, the plotting area prevents you from scrolling with your finger; swipe along the edges of the plot to scroll instead.
 
@@ -78,7 +78,7 @@ US <- USall %>% group_by(Date) %>%
 ##   f   - parametric distribution function
 ##   v0  - initial parameter estimates
 ##   k   - number of days to predict
-fitCurve <- function( .df, obs, f, v0, k=5 ) {
+fitCurve <- function( .df, obs, f, v0, k=7 ) {
   ## Compute day offset from start date
   .df <- .df %>% transmute( x = 1:n(), y = {{obs}} )
   
@@ -126,7 +126,7 @@ plotly::ggplotly(gg, tooltip="text") %>%
 
 ## Data Sources
 
-The observed data is aggregated across three data sources: John Hopkins University ([JHU](https://github.com/CSSEGISandData/COVID-19)), The COVID Tracking Project ([CTP](https://covidtracking.com/)), and The New York Times ([NYT](https://github.com/nytimes/covid-19-data)). The reason for aggregation is to smooth out any small discrepancies in reporting. For example, in the plot below you may notice that the number of cases was under-reported for Mar 18th and over-reported for Mar 19th by JHU, relative to the other two data sources. (This is likely due to time zone differences.) To reduce the effect of such artifacts, the curve is fit to the median values computed for each date.
+The observed data is aggregated across three data sources: John Hopkins University ([JHU](https://github.com/CSSEGISandData/COVID-19)), The COVID Tracking Project ([CTP](https://covidtracking.com/)), and The New York Times ([NYT](https://github.com/nytimes/covid-19-data)). The reason for aggregation is to smooth out small discrepancies in reporting. For example, in the plot below you may notice that the number of cases was under-reported for Mar 18th and over-reported for Mar 19th by JHU, relative to the other two data sources. (This is likely due to time zone differences.) To reduce the effect of such artifacts, the curve is fit to the median values computed for each date.
 
 ```{r out.width='100%'}
 ## Plot all data side-by-side
