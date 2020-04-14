@@ -11,7 +11,7 @@ library( tidyverse )
 ## Common set of elements used through the plots
 etxt <- function(s, ...) {element_text( size = s, face = "bold", ... )}
 theme_covid <- function()
-  list( scale_x_date(date_breaks="2 days", date_labels="%b %d"),
+  list( scale_x_date(date_breaks="3 days", date_labels="%b %d"),
         scale_y_continuous(name="New Cases in the U.S.", labels=scales::label_number_si()),
         theme_bw() + 
           theme(axis.text.y = etxt(12), axis.title = etxt(14),
@@ -121,6 +121,8 @@ gg <- ggplot(mapping = aes(Date, New, fill=Values, color=Values,
 plotly::ggplotly(gg, tooltip="text") %>% 
   plotly::layout(legend = list(x=0.01, y=0.99, bordercolor="gray"))
 ```
+
+<div style="text-align: right">Root Mean Squared Error: `r round(fit$rmse)`</div>
 
 ***
 
