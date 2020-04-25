@@ -48,7 +48,7 @@ rawData$NYT <- file.path("https://raw.githubusercontent.com/nytimes",
 
 ## Reduce to the earliest common date
 ## Compute new confirmed cases for each day / data source combo
-dStart <- map(rawData, with, min(Date)) %>% lift(max)()
+dStart <- lubridate::ymd("2020-03-01")
 USall <- bind_rows(rawData, .id="Source") %>% 
   filter( Date >= dStart ) %>%
   group_by(Source) %>%
