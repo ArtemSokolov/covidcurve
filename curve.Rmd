@@ -9,9 +9,10 @@ knitr::opts_chunk$set(echo = FALSE)
 library( tidyverse )
 
 ## Common set of elements used through the plots
+ebl <- element_blank
 etxt <- function(s, ...) {element_text( size = s, face = "bold", ... )}
 theme_covid <- function()
-  list( scale_x_date(date_breaks="3 days", date_labels="%b %d"),
+  list( scale_x_date(date_breaks="7 days", date_labels="%b %d"),
         scale_y_continuous(name="New Cases in the U.S.", labels=scales::label_number_si()),
         theme_bw() + 
           theme(axis.text.y = etxt(12), axis.title = etxt(14),
@@ -58,11 +59,11 @@ USall <- bind_rows(rawData, .id="Source") %>%
   filter( Date > dStart )    # Remove the leading zeroes
 ```
 
-Undoubtedly, we’ve all heard about “flattening the curve”: the goal of slowing the rate of new COVID-19 infections by limiting person-to-person contacts. A related question is what the curve even looks like right now. Is it accelerating or slowing down? When is the peak expected to occur? Since data collection became more systematic, we are in a position to view these questions through the lens of values observed so far.
+Undoubtedly, we've all heard about "flattening the curve": the goal of slowing the rate of new COVID-19 infections by limiting person-to-person contacts. A related question is what the curve even looks like right now. Is it accelerating or slowing down? When is the peak expected to occur? Since data collection became more systematic, we are in a position to view these questions through the lens of values observed so far.
 
 Below, I apply simple curve fitting to model new COVID-19 cases in the U.S. over time. The data is aggregated from three different sources (see below). I chose to fit a log-normal distribution, which is [traditionally used by epidemilogists](https://www.cdc.gov/csels/dsepd/ss1978/lesson1/section11.html) to study cases by date of onset. The curve has an asymmetric bell-like shape with a rapid increase in new cases at the start, followed by a more gradual decrease over time.
 
-After fitting the curve, I use it to plot projections for one week in the future. These predictions are a pet project to satisfy my own curiosity and should be taken with a grain of salt, since they don’t account for the many factors at play in a rapidly-changing situation. With that said, I aim to re-run the script daily to fit new data points as they become available.
+After fitting the curve, I use it to plot projections for one week in the future. These predictions are a pet project to satisfy my own curiosity and should be taken with a grain of salt, since they don't account for the many factors at play in a rapidly-changing situation. With that said, I aim to re-run the script daily to fit new data points as they become available.
 
 The plot is interactive and best viewed on a computer, where you can hover a mouse pointer over individual points, as well as click and drag to pan and zoom around. The functionality is more limited on a mobile screen and varies from device to device. On some devices, the plotting area prevents you from scrolling with your finger; swipe along the edges of the plot to scroll instead.
 
@@ -108,18 +109,17 @@ P <- bind_rows( mutate(US, Values="Observed"),
   mutate( Hover = str_c("Date: ", Date, "<br>",
                         "New : ", as.integer(New), "<br>",
                         Values) )
-  
-## Plot results
-pal <- c("Observed"="gray", "Fit"="steelblue")
-gg <- ggplot(mapping = aes(Date, New, fill=Values, color=Values,
-                           group=Values, text=Hover)) +
-  geom_bar( data=subset(P, Values=="Observed"), stat="identity" ) +
-  geom_line( data=subset(P, Values!="Observed"), size=1.25 ) +
-  scale_fill_manual(values=pal) + scale_color_manual(values=pal) +
-  theme_covid()
 
-plotly::ggplotly(gg, tooltip="text") %>% 
-  plotly::layout(legend = list(x=0.01, y=0.99, bordercolor="gray"))
+## Plot results
+pal <- c("Observed"="lightgray", "Fit"="steelblue")
+gg <- ggplot(mapping = aes(Date, New, group=Values, text=Hover)) +
+  geom_bar( data=subset(P, Values=="Observed"), aes(fill=Values, color="white"),
+            stat="identity", lwd=0.01 ) +
+  geom_line( data=subset(P, Values!="Observed"), aes(color=Values), size=1.25 ) +
+  scale_fill_manual(values=pal, guide=FALSE) + scale_color_manual(values=pal, guide=FALSE) +
+  theme_covid() + theme( panel.grid.major.x = ebl(), panel.grid.minor.x = ebl() )
+
+plotly::ggplotly(gg, tooltip="text", height=400) %>% plotly::hide_legend()
 ```
 
 <div style="text-align: right">Root Mean Squared Error: `r round(fit$rmse)`</div>
