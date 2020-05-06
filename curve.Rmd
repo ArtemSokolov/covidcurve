@@ -7,6 +7,28 @@ output: html_document
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 library( tidyverse )
+library( lubridate )
+
+## Fits a curve and generates predictions for k days forward
+##   .df - data frame mapping Date -> Observation
+##   obs - column in .df with observation values
+##   f   - parametric distribution function
+##   v0  - initial parameter estimates
+##   k   - number of days to predict
+fitCurve <- function( .df, obs, f, v0, k=7 ) {
+  ## Compute day offset from start date
+  .df <- .df %>% transmute( x = 1:n(), y = {{obs}} )
+  
+  ## Define the RMSE objective function
+  fobj <- function(v) {(.df$y - f(.df$x, v))^2 %>% mean %>% sqrt}
+  
+  ## Optimize the objective function and compute predictions
+  fit <- optim(v0, fobj)
+  xp <- 1:(max(.df$x)+k)
+  list( pred = tibble( Date = dStart+days(xp),
+                       New = f(xp, fit$par) ),
+        rmse = fit$value, param = fit$par )
+}
 
 ## Common set of elements used through the plots
 ebl <- element_blank
@@ -32,12 +54,12 @@ rawData$JHU <- file.path("https://raw.githubusercontent.com/CSSEGISandData/COVID
   filter( Country == "US" ) %>%
   select( -Lat, -Long, -Country, -State ) %>%
   gather( Date, Confirmed ) %>%
-  mutate_at( "Date", lubridate::mdy )
+  mutate_at( "Date", mdy )
 
 ## Load COVID Tracking Project data
 rawData$CTP <- read_csv("https://covidtracking.com/api/us/daily.csv",
                         col_types=cols(date=col_character())) %>%
-  transmute( Date = lubridate::ymd(date), Confirmed = positive )
+  transmute( Date = ymd(date), Confirmed = positive )
 
 ## Load New York Times data
 rawData$NYT <- file.path("https://raw.githubusercontent.com/nytimes",
@@ -49,7 +71,7 @@ rawData$NYT <- file.path("https://raw.githubusercontent.com/nytimes",
 
 ## Reduce to the earliest common date
 ## Compute new confirmed cases for each day / data source combo
-dStart <- lubridate::ymd("2020-03-01")
+dStart <- ymd("2020-03-01")
 USall <- bind_rows(rawData, .id="Source") %>% 
   filter( Date >= dStart ) %>%
   group_by(Source) %>%
@@ -61,9 +83,7 @@ USall <- bind_rows(rawData, .id="Source") %>%
 
 Undoubtedly, we've all heard about "flattening the curve": the goal of slowing the rate of new COVID-19 infections by limiting person-to-person contacts. A related question is what the curve even looks like right now. Is it accelerating or slowing down? When is the peak expected to occur? Since data collection became more systematic, we are in a position to view these questions through the lens of values observed so far.
 
-Below, I apply simple curve fitting to model new COVID-19 cases in the U.S. over time. The data is aggregated from three different sources (see below). I chose to fit a log-normal distribution, which is [traditionally used by epidemilogists](https://www.cdc.gov/csels/dsepd/ss1978/lesson1/section11.html) to study cases by date of onset. The curve has an asymmetric bell-like shape with a rapid increase in new cases at the start, followed by a more gradual decrease over time.
-
-After fitting the curve, I use it to plot projections for one week in the future. These predictions are a pet project to satisfy my own curiosity and should be taken with a grain of salt, since they don't account for the many factors at play in a rapidly-changing situation. With that said, I aim to re-run the script daily to fit new data points as they become available.
+Below, I apply simple curve fitting to model new COVID-19 cases in the U.S. over time. The data is aggregated from three different sources (see below). I chose to fit a log-normal distribution, which is [traditionally used by epidemilogists](https://www.cdc.gov/csels/dsepd/ss1978/lesson1/section11.html) to study cases by date of onset. After fitting the curve, I use it to plot projections for two weeks in the future.
 
 The plot is interactive and best viewed on a computer, where you can hover a mouse pointer over individual points, as well as click and drag to pan and zoom around. The functionality is more limited on a mobile screen and varies from device to device. On some devices, the plotting area prevents you from scrolling with your finger; swipe along the edges of the plot to scroll instead.
 
@@ -71,28 +91,15 @@ The plot is interactive and best viewed on a computer, where you can hover a mou
 ```{r warning=FALSE, out.width='100%'}
 ## Use the median value for each day across the three datasets
 US <- USall %>% group_by(Date) %>%
-  summarize_at("New", median)
+  summarize_at("New", median) %>%
+  mutate( DOW  = wday(Date, label=TRUE, week_start=1),
+          Week = ceiling(interval(dStart, Date) / dweeks(1)) )
 
-## Fits a curve and generates predictions for k days forward
-##   .df - data frame mapping Date -> Observation
-##   obs - column in .df with observation values
-##   f   - parametric distribution function
-##   v0  - initial parameter estimates
-##   k   - number of days to predict
-fitCurve <- function( .df, obs, f, v0, k=7 ) {
-  ## Compute day offset from start date
-  .df <- .df %>% transmute( x = 1:n(), y = {{obs}} )
-  
-  ## Define the RMSE objective function
-  fobj <- function(v) {(.df$y - f(.df$x, v))^2 %>% mean %>% sqrt}
-  
-  ## Optimize the objective function and compute predictions
-  fit <- optim(v0, fobj)
-  xp <- 1:(max(.df$x)+k)
-  list( pred = tibble( Date = dStart+lubridate::days(xp),
-                       New = f(xp, fit$par) ),
-        rmse = fit$value, param = fit$par )
-}
+## Summarize daily average by week
+W <- US %>% arrange(Date) %>%
+  group_by( Week ) %>%
+  filter( n() == 7 ) %>%                       # Exclude week-in-progress
+  summarize( New = sum(New), Date = Date[1] )
 
 ## Fit a log-normal distribution to New column in US data
 ## Use yesterday's fit as a starting point 
@@ -126,9 +133,30 @@ plotly::ggplotly(gg, tooltip="text", height=400) %>% plotly::hide_legend()
 
 ***
 
+```{r, include=FALSE}
+## Identify the cyclic portion of the data
+Cy <- US %>% filter( Date > ymd("2020-04-05") ) %>% 
+  group_by(Week) %>% mutate( WeekOf = as.character(Date[1]) ) %>% 
+  ungroup() %>% select(-Week)
+
+ys <- seq(20000, 40000, by=5000)
+
+ggplot( Cy, aes(x=DOW, y=New, group=WeekOf, color=WeekOf) ) + 
+  scale_y_continuous(limits=c(15000,40000), breaks=ys, labels=scales::label_number_si()) +
+  scale_x_discrete() +
+  geom_hline( yintercept=ys, color="lightgray" ) +
+  geom_vline( xintercept=1:7, color="lightgray" ) +
+  geom_line() + geom_point() + theme_minimal() + 
+  coord_polar(start = -pi/7, direction=1) +
+  theme(axis.ticks.length.y = unit(-5, "cm"), panel.grid=ebl())
+
+```
+
+
 ## Data Sources
 
 The observed data is aggregated across three data sources: John Hopkins University ([JHU](https://github.com/CSSEGISandData/COVID-19)), The COVID Tracking Project ([CTP](https://covidtracking.com/)), and The New York Times ([NYT](https://github.com/nytimes/covid-19-data)). The reason for aggregation is to smooth out small discrepancies in reporting. For example, in the plot below you may notice that the number of cases was under-reported for Mar 18th and over-reported for Mar 19th by JHU, relative to the other two data sources. (This is likely due to time zone differences.) To reduce the effect of such artifacts, the curve is fit to the median values computed for each date.
+
 
 ```{r out.width='100%'}
 ## Plot all data side-by-side
