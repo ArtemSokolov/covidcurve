@@ -83,7 +83,7 @@ USall <- bind_rows(rawData, .id="Source") %>%
 
 Undoubtedly, we've all heard about "flattening the curve": the goal of slowing the rate of new COVID-19 infections by limiting person-to-person contacts. A related question is what the curve even looks like right now. Is it accelerating or slowing down? When is the peak expected to occur? Since data collection became more systematic, we are in a position to view these questions through the lens of values observed so far.
 
-Below, I apply simple curve fitting to model new COVID-19 cases in the U.S. over time. The data is aggregated from three different sources (see below). I chose to fit a log-normal distribution, which is [traditionally used by epidemilogists](https://www.cdc.gov/csels/dsepd/ss1978/lesson1/section11.html) to study cases by date of onset. After fitting the curve, I use it to plot projections for two weeks in the future.
+Below, I apply simple curve fitting to model new COVID-19 cases in the U.S. over time. The data is aggregated from three different sources (see below). I chose to fit a log-normal distribution, which is [traditionally used by epidemilogists](https://www.cdc.gov/csels/dsepd/ss1978/lesson1/section11.html) to study cases by date of onset. After fitting the curve, I use it to plot projections for one week into the future.
 
 The plot is interactive and best viewed on a computer, where you can hover a mouse pointer over individual points, as well as click and drag to pan and zoom around. The functionality is more limited on a mobile screen and varies from device to device. On some devices, the plotting area prevents you from scrolling with your finger; swipe along the edges of the plot to scroll instead.
 
@@ -133,25 +133,37 @@ plotly::ggplotly(gg, tooltip="text", height=400) %>% plotly::hide_legend()
 
 ***
 
-```{r, include=FALSE}
+## Daily variation
+
+Since the beginning of April, there's been a distinct periodicity in case reports. In particular, we can observe spikes in the number of cases reported every Friday over the past several weeks. This likely indicates the weekly routine of human activity, as everybody adjusted to the "new normal" after the inital spread of the virus.
+
+```{r}
 ## Identify the cyclic portion of the data
 Cy <- US %>% filter( Date > ymd("2020-04-05") ) %>% 
-  group_by(Week) %>% mutate( WeekOf = as.character(Date[1]) ) %>% 
+  group_by(Week) %>% mutate( `Week of` = as.character(Date[1]) ) %>% 
   ungroup() %>% select(-Week)
 
+## Define interval labels
 ys <- seq(20000, 40000, by=5000)
+L <- tibble( DOW = "Mon", New = ys, Lbl = scales::label_number_si()(ys) )
 
-ggplot( Cy, aes(x=DOW, y=New, group=WeekOf, color=WeekOf) ) + 
-  scale_y_continuous(limits=c(15000,40000), breaks=ys, labels=scales::label_number_si()) +
+ggplot( Cy, aes(x=DOW, y=New) ) + 
+  scale_y_continuous(limits=c(15000,40000), breaks=ys) +
   scale_x_discrete() +
+  scale_color_manual( values=ggthemes::few_pal()(5) ) +
   geom_hline( yintercept=ys, color="lightgray" ) +
   geom_vline( xintercept=1:7, color="lightgray" ) +
-  geom_line() + geom_point() + theme_minimal() + 
+  geom_point( aes(color=`Week of`), size=3) + theme_minimal() + 
+  geom_text( aes(label=Lbl), data=L, color="darkgray", hjust=1.1 ) +
   coord_polar(start = -pi/7, direction=1) +
-  theme(axis.ticks.length.y = unit(-5, "cm"), panel.grid=ebl())
+  ylab( "New cases in the U.S." ) +
+  theme(axis.text.y = ebl(), panel.grid=ebl(),
+        axis.text.x = etxt(12), axis.title.y=etxt(14),
+        axis.title.x = ebl(), legend.text = etxt(12), legend.title=etxt(14))
 
 ```
 
+***
 
 ## Data Sources
 
