@@ -135,7 +135,7 @@ plotly::ggplotly(gg, tooltip="text", height=400) %>% plotly::hide_legend()
 
 ## Daily variation
 
-Since the beginning of April, there's been a distinct periodicity in case reports. In particular, we can observe spikes in the number of cases reported every Friday over the past several weeks. This likely indicates the weekly routine of human activity, as everybody adjusted to the "new normal" after the inital spread of the virus.
+Since the beginning of April, there's been a distinct periodicity in case reports. In particular, we can observe spikes in the number of cases reported every Friday over the past several weeks. This likely indicates that human activity settled into a weekly routine, as everybody adjusted to the "new normal" after the initial spread of the virus.
 
 ```{r}
 ## Identify the cyclic portion of the data
