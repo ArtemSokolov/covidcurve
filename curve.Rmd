@@ -142,15 +142,16 @@ Since the beginning of April, there's been a distinct periodicity in case report
 Cy <- US %>% filter( Date > ymd("2020-04-05") ) %>% 
   group_by(Week) %>% mutate( `Week of` = as.character(Date[1]) ) %>% 
   ungroup() %>% select(-Week)
+nWeeks <- unique(Cy$`Week of`) %>% length
 
 ## Define interval labels
-ys <- seq(20000, 40000, by=5000)
+ys <- seq(15000, 40000, by=5000)
 L <- tibble( DOW = "Mon", New = ys, Lbl = scales::label_number_si()(ys) )
 
 ggplot( Cy, aes(x=DOW, y=New) ) + 
-  scale_y_continuous(limits=c(15000,40000), breaks=ys) +
+  scale_y_continuous(limits=c(10000,40000), breaks=ys) +
   scale_x_discrete() +
-  scale_color_manual( values=ggthemes::few_pal()(5) ) +
+  scale_color_manual( values=ggthemes::few_pal()(nWeeks) ) +
   geom_hline( yintercept=ys, color="lightgray" ) +
   geom_vline( xintercept=1:7, color="lightgray" ) +
   geom_point( aes(color=`Week of`), size=3) + theme_minimal() + 
