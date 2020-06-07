@@ -4,6 +4,10 @@ author: "Artem Sokolov (Updated: `r Sys.Date()`)"
 output: html_document
 ---
 
+<span style="color:red">This was a pet project to determine when new COVID-19 cases peaked. The data suggests that the peak occured around mid-April. The project has now run its course, and the page will no longer be updated. If you are interested in staying on top of the latest reports, I strongly recommend </span> [the COVID-19 resource in The New York Times](https://www.nytimes.com/interactive/2020/us/coronavirus-us-cases.html).
+
+***
+
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = FALSE)
 library( tidyverse )
